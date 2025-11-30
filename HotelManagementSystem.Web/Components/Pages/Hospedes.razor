@@ -1,0 +1,302 @@
+
+@page "/hospedes"
+@attribute [Authorize]
+@inject GuestService GuestService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold text-gray-800">Gestão de Hóspedes</h1>
+    <button @onclick="OpenAddModal" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200 flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+        </svg>
+        Novo Hóspede
+    </button>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+             <div class="relative w-64">
+                <input type="text" @bind="searchTerm" @bind:event="oninput" @bind:after="SearchGuests" placeholder="Buscar hóspede..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </div>
+            <span class="text-sm font-medium text-gray-600">Total: <span class="text-gray-900 font-bold">@totalCount</span></span>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 font-semibold tracking-wider">
+                        <th class="px-6 py-4">Nome</th>
+                        <th class="px-6 py-4">CPF</th>
+                        <th class="px-6 py-4">Contato</th>
+                        <th class="px-6 py-4">Email</th>
+                        <th class="px-6 py-4 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @if (guests == null)
+                    {
+                        <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Carregando...</td></tr>
+                    }
+                    else if (!guests.Any())
+                    {
+                        <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500 italic">Nenhum hóspede encontrado.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var guest in guests)
+                        {
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-6 py-4 font-medium text-gray-800">@guest.Nome</td>
+                                <td class="px-6 py-4 text-gray-600">@guest.CPF</td>
+                                <td class="px-6 py-4 text-gray-600">@guest.Contato</td>
+                                <td class="px-6 py-4 text-gray-600">@guest.Email</td>
+                                <td class="px-6 py-4 text-right space-x-2">
+                                    <button @onclick="() => EditGuest(guest)" class="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors">Editar</button>
+                                    <button @onclick="() => DeleteGuest(guest.Id)" class="text-red-600 hover:text-red-800 font-medium text-sm transition-colors">Excluir</button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="px-6 py-4 border-t border-gray-100 flex justify-between items-center bg-gray-50">
+            <span class="text-sm text-gray-600">
+                Mostrando @((currentPage - 1) * pageSize + 1) a @Math.Min(currentPage * pageSize, totalCount) de @totalCount registros
+            </span>
+            <div class="flex space-x-2">
+                <button @onclick="PreviousPage" disabled="@(currentPage == 1)" class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Anterior
+                </button>
+                <button @onclick="NextPage" disabled="@(currentPage * pageSize >= totalCount)" class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Próxima
+                </button>
+            </div>
+        </div>
+    </div>
+
+@if (showModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 transform transition-all scale-100 overflow-y-auto max-h-[90vh]">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">@(currentGuest.Id == 0 ? "Novo Hóspede" : "Editar Hóspede")</h2>
+                <button @onclick="CloseModal" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            
+            <EditForm Model="currentGuest" OnValidSubmit="SaveGuest">
+                <DataAnnotationsValidator />
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
+                        <InputText @bind-Value="currentGuest.Nome" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <ValidationMessage For="@(() => currentGuest.Nome)" class="text-red-500 text-xs mt-1" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">CPF</label>
+                        <InputText @bind-Value="currentGuest.CPF" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <InputText @bind-Value="currentGuest.Email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <ValidationMessage For="@(() => currentGuest.Email)" class="text-red-500 text-xs mt-1" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Contato</label>
+                        <InputText @bind-Value="currentGuest.Contato" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Endereço</label>
+                        <InputText @bind-Value="currentGuest.Endereco" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                </div>
+
+                <div class="border-t pt-4 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Familiares / Acompanhantes</h3>
+                        <button type="button" @onclick="AddFamilyMember" class="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Adicionar
+                        </button>
+                    </div>
+                    
+                    @if (currentGuest.Familiares.Any())
+                    {
+                        <div class="space-y-3">
+                            @foreach (var familiar in currentGuest.Familiares)
+                            {
+                                <div class="flex gap-3 items-start bg-gray-50 p-3 rounded-lg">
+                                    <div class="flex-grow grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <InputText @bind-Value="familiar.Nome" placeholder="Nome" class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm" />
+                                        <InputText @bind-Value="familiar.Parentesco" placeholder="Parentesco" class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm" />
+                                        <InputNumber @bind-Value="familiar.Idade" placeholder="Idade" class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm" />
+                                    </div>
+                                    <button type="button" @onclick="() => RemoveFamilyMember(familiar)" class="text-red-500 hover:text-red-700 p-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-gray-500 text-sm italic">Nenhum familiar adicionado.</p>
+                    }
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button type="button" @onclick="CloseModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm">Salvar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Hospede>? guests;
+    private Hospede currentGuest = new();
+    private bool showModal = false;
+    
+    // Pagination & Search
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalCount;
+    private string searchTerm = "";
+
+    [SupplyParameterFromQuery]
+    public int? EditId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGuests();
+        if (EditId.HasValue)
+        {
+            // We might need to fetch the specific guest if not in the current page, 
+            // but for simplicity let's assume we just open the modal if found or fetch it directly.
+            // Better approach: Fetch specific guest by ID if EditId is present.
+            var guest = await GuestService.GetGuestAsync(EditId.Value);
+            if (guest != null)
+            {
+                EditGuest(guest);
+            }
+        }
+    }
+
+    private async Task LoadGuests()
+    {
+        var result = await GuestService.GetGuestsAsync(currentPage, pageSize, searchTerm);
+        guests = result.Guests;
+        totalCount = result.TotalCount;
+    }
+
+    private async Task SearchGuests()
+    {
+        currentPage = 1;
+        await LoadGuests();
+    }
+
+    private async Task PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await LoadGuests();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (currentPage * pageSize < totalCount)
+        {
+            currentPage++;
+            await LoadGuests();
+        }
+    }
+
+    private void OpenAddModal()
+    {
+        currentGuest = new Hospede();
+        showModal = true;
+    }
+
+    private void EditGuest(Hospede guest)
+    {
+        // Clone to avoid editing directly in the list
+        currentGuest = new Hospede
+        {
+            Id = guest.Id,
+            Nome = guest.Nome,
+            CPF = guest.CPF,
+            Email = guest.Email,
+            Contato = guest.Contato,
+            Endereco = guest.Endereco,
+            Familiares = guest.Familiares.Select(f => new Familiar 
+            { 
+                Id = f.Id, 
+                Nome = f.Nome, 
+                Parentesco = f.Parentesco, 
+                Idade = f.Idade,
+                HospedeId = f.HospedeId
+            }).ToList()
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        // Clear query param if present to avoid reopening on refresh (optional, requires navigation)
+    }
+
+    private async Task SaveGuest()
+    {
+        if (currentGuest.Id == 0)
+        {
+            await GuestService.AddGuestAsync(currentGuest);
+        }
+        else
+        {
+            await GuestService.UpdateGuestAsync(currentGuest);
+        }
+        
+        showModal = false;
+        await LoadGuests();
+    }
+
+    private async Task DeleteGuest(int id)
+    {
+        await GuestService.DeleteGuestAsync(id);
+        await LoadGuests();
+    }
+
+    private void AddFamilyMember()
+    {
+        currentGuest.Familiares.Add(new Familiar());
+    }
+
+    private void RemoveFamilyMember(Familiar familiar)
+    {
+        currentGuest.Familiares.Remove(familiar);
+    }
+}

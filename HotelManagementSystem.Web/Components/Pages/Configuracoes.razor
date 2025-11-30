@@ -1,0 +1,152 @@
+@page "/configuracoes"
+@attribute [Authorize(Roles = "Admin")]
+@inject ConfigurationService ConfigurationService
+@inject NavigationManager Navigation
+@inject BrandingService Branding
+@rendermode InteractiveServer
+
+<div class="max-w-2xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-800">Configurações do Sistema</h1>
+    </div>
+
+    @if (config == null)
+    {
+        <p class="text-gray-500">Carregando...</p>
+    }
+    else
+    {
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <EditForm Model="config" OnValidSubmit="SaveConfig">
+                <DataAnnotationsValidator/>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nome do Hotel</label>
+                        <InputText @bind-Value="config.NomeHotel" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">CNPJ</label>
+                        <InputText @bind-Value="config.CNPJ" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Contato (Telefone/Email)</label>
+                        <InputText @bind-Value="config.Contato" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Endereço</label>
+                        <InputText @bind-Value="config.Endereco" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
+                    </div>
+
+                    <div class="border-t border-gray-200 pt-4 mt-4">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">Personalização (Branding)</h2>
+
+                        <div class="grid grid-cols-1 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nome do Sistema (Cabeçalho/Título)</label>
+                                <InputText @bind-Value="config.NomeSistema" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Título da Tela de Login</label>
+                                <InputText @bind-Value="config.LoginTitle" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Logo do Sistema</label>
+                                <div class="flex items-center space-x-4">
+                                    @if (!string.IsNullOrEmpty(config.LogoUrl))
+                                    {
+                                        <div class="h-12 w-12 rounded bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-200">
+                                            <img src="@config.LogoUrl" alt="Logo atual" class="max-h-full max-w-full"/>
+                                        </div>
+                                    }
+                                    <div class="flex-1">
+                                        <InputFile OnChange="HandleLogoUpload" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" accept=".png,.jpg,.jpeg,.svg"/>
+                                        <p class="text-xs text-gray-500 mt-1">Recomendado: Imagem PNG com fundo transparente. Max 2MB.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex justify-end">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow transition duration-200">
+                        Salvar Alterações
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+
+        @if (showSuccessMessage)
+        {
+            <div class="mt-4 p-4 bg-green-50 text-green-700 rounded-lg border border-green-200 animate-fade-in">
+                Configurações salvas com sucesso!
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private HotelConfiguration? config;
+    private bool showSuccessMessage = false;
+    private long maxFileSize = 1024 * 1024 * 2; // 2MB
+
+    protected override async Task OnInitializedAsync()
+    {
+        config = await ConfigurationService.GetConfigurationAsync();
+    }
+
+    private async Task HandleLogoUpload(InputFileChangeEventArgs e)
+    {
+        if (config == null) return;
+
+        var file = e.File;
+        if (file != null)
+        {
+            try
+            {
+                if (file.Size > maxFileSize)
+                {
+                    // Handle error: file too large
+                    return;
+                }
+
+                var extension = Path.GetExtension(file.Name);
+                var fileName = $"logo_{DateTime.Now.Ticks}{extension}";
+                var path = Path.Combine("wwwroot", "images", fileName);
+
+                // Ensure directory exists
+                Directory.CreateDirectory(Path.Combine("wwwroot", "images"));
+
+                await using var stream = file.OpenReadStream(maxFileSize);
+                await using var fs = new FileStream(path, FileMode.Create);
+                await stream.CopyToAsync(fs);
+
+                config.LogoUrl = $"/images/{fileName}";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error uploading file: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task SaveConfig()
+    {
+        if (config != null)
+        {
+            await ConfigurationService.UpdateConfigurationAsync(config);
+            await Branding.InitializeAsync(); // Refresh branding
+            showSuccessMessage = true;
+            StateHasChanged();
+            await Task.Delay(3000);
+            showSuccessMessage = false;
+        }
+    }
+
+}

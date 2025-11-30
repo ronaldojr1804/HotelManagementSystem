@@ -1,0 +1,206 @@
+@page "/quartos"
+@attribute [Authorize]
+@inject RoomService RoomService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold text-gray-800">Gestão de Quartos</h1>
+    <button @onclick="OpenAddModal" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200 flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Novo Quarto
+    </button>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    @if (rooms == null)
+    {
+        <p class="text-gray-500">Carregando...</p>
+    }
+    else
+    {
+        @foreach (var room in rooms)
+        {
+            <div class="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden border border-gray-100">
+                <div class="p-5">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="bg-gray-100 text-gray-800 text-xs font-bold px-2 py-1 rounded uppercase tracking-wide">
+                            @room.Tipo
+                        </div>
+                        <div class="flex space-x-2">
+                             <button @onclick="() => EditRoom(room)" class="text-gray-400 hover:text-blue-600 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                            </button>
+                            <button @onclick="() => DeleteRoom(room.Id)" class="text-gray-400 hover:text-red-600 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-1">Quarto @room.Numero</h3>
+                    <p class="text-2xl font-bold text-blue-600 mb-2">@room.PrecoBase.ToString("C") <span class="text-sm text-gray-400 font-normal">/ noite</span></p>
+                    @if (!string.IsNullOrEmpty(room.Detalhes))
+                    {
+                        <p class="text-sm text-gray-500 mb-4 line-clamp-2" title="@room.Detalhes">@room.Detalhes</p>
+                    }
+                    else
+                    {
+                        <div class="mb-4"></div>
+                    }
+                    
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="@(room.EstaOcupado ? "text-red-500" : "text-green-500") flex items-center font-medium">
+                            <span class="w-2 h-2 rounded-full mr-2 @(room.EstaOcupado ? "bg-red-500" : "bg-green-500")"></span>
+                            @(room.EstaOcupado ? "Ocupado" : "Disponível")
+                        </span>
+                         <span class="@(room.EstaLimpo ? "text-green-500" : "text-yellow-500") flex items-center font-medium">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                            </svg>
+                            @(room.EstaLimpo ? "Limpo" : "Sujo")
+                        </span>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (showModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 transform transition-all scale-100">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">@(currentRoom.Id == 0 ? "Novo Quarto" : "Editar Quarto")</h2>
+                <button @onclick="CloseModal" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            
+            <EditForm Model="currentRoom" OnValidSubmit="SaveRoom">
+                <DataAnnotationsValidator />
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Número</label>
+                        <InputText @bind-Value="currentRoom.Numero" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" placeholder="Ex: 101" />
+                        <ValidationMessage For="@(() => currentRoom.Numero)" class="text-red-500 text-xs mt-1" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+                        <InputSelect @bind-Value="currentRoom.Tipo" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                            <option value="Standard">Standard</option>
+                            <option value="Luxo">Luxo</option>
+                            <option value="Suite">Suite</option>
+                        </InputSelect>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Preço Base</label>
+                        <InputNumber @bind-Value="currentRoom.PrecoBase" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Detalhes</label>
+                        <InputTextArea @bind-Value="currentRoom.Detalhes" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" placeholder="Descrição do quarto, vista, etc." rows="3" />
+                    </div>
+                    
+                    <div class="flex items-center space-x-4 pt-2">
+                        <label class="flex items-center cursor-pointer">
+                            <InputCheckbox @bind-Value="currentRoom.EstaLimpo" class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500" />
+                            <span class="ml-2 text-gray-700">Está Limpo</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="mt-8 flex justify-end space-x-3">
+                    <button type="button" @onclick="CloseModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm">Salvar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Quarto>? rooms;
+    private Quarto currentRoom = new();
+    private bool showModal = false;
+
+    [SupplyParameterFromQuery]
+    public int? EditId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRooms();
+        if (EditId.HasValue)
+        {
+            var room = rooms?.FirstOrDefault(r => r.Id == EditId.Value);
+            if (room != null)
+            {
+                EditRoom(room);
+            }
+        }
+    }
+
+    private async Task LoadRooms()
+    {
+        rooms = await RoomService.GetRoomsAsync();
+    }
+
+    private void OpenAddModal()
+    {
+        currentRoom = new Quarto();
+        showModal = true;
+    }
+
+    private void EditRoom(Quarto room)
+    {
+        currentRoom = new Quarto
+        {
+            Id = room.Id,
+            Numero = room.Numero,
+            Tipo = room.Tipo,
+            PrecoBase = room.PrecoBase,
+            EstaLimpo = room.EstaLimpo,
+            EstaOcupado = room.EstaOcupado,
+            Detalhes = room.Detalhes
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private async Task SaveRoom()
+    {
+        if (currentRoom.Id == 0)
+        {
+            await RoomService.AddRoomAsync(currentRoom);
+        }
+        else
+        {
+            await RoomService.UpdateRoomAsync(currentRoom);
+        }
+        
+        showModal = false;
+        await LoadRooms();
+    }
+
+    private async Task DeleteRoom(int id)
+    {
+        // In a real app, show confirmation dialog
+        await RoomService.DeleteRoomAsync(id);
+        await LoadRooms();
+    }
+}

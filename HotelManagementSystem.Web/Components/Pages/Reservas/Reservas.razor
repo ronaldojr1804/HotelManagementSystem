@@ -1,0 +1,277 @@
+@page "/reservas"
+@attribute [Authorize]
+@inject ReservationService ReservationService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold text-gray-800">Reservas</h1>
+    <a href="reservas/nova" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200 flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Nova Reserva
+    </a>
+</div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <!-- Date Range -->
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Período</label>
+                <div class="flex items-center space-x-2">
+                    <input type="date" @bind="startDate" @bind:after="FilterReservations" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <span class="text-gray-400">-</span>
+                    <input type="date" @bind="endDate" @bind:after="FilterReservations" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+            </div>
+
+            <!-- Guest Search -->
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Hóspede</label>
+                <div class="relative">
+                    <input type="text" @bind="guestSearch" @bind:event="oninput" @bind:after="FilterReservations" placeholder="Buscar por nome..." class="w-full px-3 py-2 pl-9 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Status Filters -->
+            <div class="lg:col-span-2">
+                <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                <div class="flex flex-wrap gap-2">
+                    <button @onclick="() => { showActive = !showActive; FilterReservations(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showActive ? "bg-green-100 text-green-800 border-green-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+                        Ativas
+                    </button>
+                    <button @onclick="() => { showFuture = !showFuture; FilterReservations(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showFuture ? "bg-blue-100 text-blue-800 border-blue-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+                        Futuras
+                    </button>
+                    <button @onclick="() => { showLate = !showLate; FilterReservations(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showLate ? "bg-red-100 text-red-800 border-red-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+                        Atrasadas
+                    </button>
+                    <button @onclick="() => { showFinished = !showFinished; FilterReservations(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showFinished ? "bg-gray-100 text-gray-800 border-gray-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+                        Finalizadas
+                    </button>
+                    <button @onclick="() => { showCancelled = !showCancelled; FilterReservations(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showCancelled ? "bg-red-50 text-red-600 border-red-100" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+                        Canceladas
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <span class="text-sm font-medium text-gray-600">Total de Reservas: <span class="text-gray-900 font-bold">@filteredReservations.Count</span></span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 font-semibold tracking-wider">
+                        <th class="px-6 py-4 cursor-pointer hover:bg-gray-100" @onclick='() => Sort("Id")'>
+                            ID @GetSortIcon("Id")
+                        </th>
+                        <th class="px-6 py-4 cursor-pointer hover:bg-gray-100" @onclick='() => Sort("Hospede")'>
+                            Hóspede @GetSortIcon("Hospede")
+                        </th>
+                        <th class="px-6 py-4 cursor-pointer hover:bg-gray-100" @onclick='() => Sort("Quarto")'>
+                            Quarto @GetSortIcon("Quarto")
+                        </th>
+                        <th class="px-6 py-4 cursor-pointer hover:bg-gray-100" @onclick='() => Sort("DataEntrada")'>
+                            Entrada @GetSortIcon("DataEntrada")
+                        </th>
+                        <th class="px-6 py-4 cursor-pointer hover:bg-gray-100" @onclick='() => Sort("DataSaida")'>
+                            Saída @GetSortIcon("DataSaida")
+                        </th>
+                        <th class="px-6 py-4">Status</th>
+                        <th class="px-6 py-4 text-right cursor-pointer hover:bg-gray-100" @onclick='() => Sort("Total")'>
+                            Total @GetSortIcon("Total")
+                        </th>
+                        <th class="px-6 py-4 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @if (!filteredReservations.Any())
+                    {
+                        <tr><td colspan="8" class="px-6 py-8 text-center text-gray-500 italic">Nenhuma reserva encontrada com os filtros selecionados.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var res in filteredReservations)
+                        {
+                            <tr class="hover:bg-gray-50 transition-colors cursor-pointer" @onclick="() => ViewDetails(res.Id)">
+                                <td class="px-6 py-4 text-gray-500 text-xs">#@res.Id</td>
+                                <td class="px-6 py-4 font-medium text-gray-800">@res.Hospede?.Nome</td>
+                                <td class="px-6 py-4 text-gray-600">Quarto @res.Quarto?.Numero</td>
+                                <td class="px-6 py-4 text-gray-600">@res.DataEntrada.ToShortDateString()</td>
+                                <td class="px-6 py-4 text-gray-600">@res.DataSaida.ToShortDateString()</td>
+                                <td class="px-6 py-4">
+                                    @if (res.Cancelada)
+                                    {
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-100">Cancelada</span>
+                                    }
+                                    else if (res.DataCheckOut.HasValue)
+                                    {
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Finalizada</span>
+                                    }
+                                    else if (res.DataEntrada <= DateTime.Today && res.DataSaida >= DateTime.Today)
+                                    {
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Ativa</span>
+                                    }
+                                    else if (res.DataEntrada > DateTime.Today)
+                                    {
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Futura</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Atrasada</span>
+                                    }
+                                </td>
+                                <td class="px-6 py-4 text-right font-medium text-gray-800">@res.TotalGeral.ToString("C")</td>
+                                <td class="px-6 py-4 text-right">
+                                    <a href="reservas/detalhes/@res.Id" class="text-blue-600 hover:text-blue-800 font-medium text-sm">Detalhes</a>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+@code {
+    private List<Reserva> allReservations = new();
+    private List<Reserva> filteredReservations = new();
+    
+    private DateTime? startDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? endDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.DaysInMonth(DateTime.Today.Year, DateTime.Today.Month));
+    private string guestSearch = "";
+    
+    // Status filters
+    private bool showActive = true;
+    private bool showFuture = true;
+    private bool showFinished = false;
+    private bool showCancelled = false;
+    private bool showLate = true;
+
+    // Sorting
+    private string sortColumn = "DataEntrada";
+    private bool sortAscending = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReservations();
+    }
+
+    private async Task LoadReservations()
+    {
+        allReservations = await ReservationService.GetReservationsAsync();
+        FilterReservations();
+    }
+
+    private void FilterReservations()
+    {
+        filteredReservations = allReservations;
+
+        // Date Filter
+        if (startDate.HasValue)
+        {
+            filteredReservations = filteredReservations.Where(r => r.DataEntrada >= startDate.Value).ToList();
+        }
+        if (endDate.HasValue)
+        {
+            filteredReservations = filteredReservations.Where(r => r.DataSaida <= endDate.Value).ToList();
+        }
+
+        // Guest Name Filter
+        if (!string.IsNullOrWhiteSpace(guestSearch))
+        {
+            filteredReservations = filteredReservations
+                .Where(r => r.Hospede != null && r.Hospede.Nome.Contains(guestSearch, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        // Status Filter
+        // Logic: If a filter is active, include reservations that match that status.
+        // If multiple filters are active, it's an OR operation between them.
+        // If no filters are active, show nothing (or everything? usually everything if none selected, but here we have toggles).
+        // Let's assume if all are off, show nothing.
+        
+        var statusMatches = new List<Reserva>();
+        bool anyFilterActive = showActive || showFuture || showFinished || showCancelled || showLate;
+
+        if (anyFilterActive)
+        {
+            filteredReservations = filteredReservations.Where(r => 
+            {
+                if (showCancelled && r.Cancelada) return true;
+                if (showFinished && r.DataCheckOut.HasValue && !r.Cancelada) return true;
+                if (showActive && r.DataEntrada <= DateTime.Today && r.DataSaida >= DateTime.Today && !r.DataCheckOut.HasValue && !r.Cancelada) return true;
+                if (showFuture && r.DataEntrada > DateTime.Today && !r.Cancelada) return true;
+                if (showLate && r.DataEntrada < DateTime.Today && !r.DataCheckOut.HasValue && !r.Cancelada) return true;
+                return false;
+            }).ToList();
+        }
+        else
+        {
+             // If no filters selected, maybe show all? Or none? Let's show none to be consistent with "filtering".
+             // But usually users expect "no filter" to mean "all". 
+             // However, these are toggle buttons acting as "include this type".
+             // If I uncheck "Active", I don't want to see Active.
+             // If I uncheck everything, I probably want to see nothing.
+             filteredReservations = new List<Reserva>();
+        }
+
+        // Sorting
+        switch (sortColumn)
+        {
+            case "Id":
+                filteredReservations = sortAscending ? filteredReservations.OrderBy(r => r.Id).ToList() : filteredReservations.OrderByDescending(r => r.Id).ToList();
+                break;
+            case "Hospede":
+                filteredReservations = sortAscending ? filteredReservations.OrderBy(r => r.Hospede?.Nome).ToList() : filteredReservations.OrderByDescending(r => r.Hospede?.Nome).ToList();
+                break;
+            case "Quarto":
+                filteredReservations = sortAscending ? filteredReservations.OrderBy(r => r.Quarto?.Numero).ToList() : filteredReservations.OrderByDescending(r => r.Quarto?.Numero).ToList();
+                break;
+            case "DataEntrada":
+                filteredReservations = sortAscending ? filteredReservations.OrderBy(r => r.DataEntrada).ToList() : filteredReservations.OrderByDescending(r => r.DataEntrada).ToList();
+                break;
+            case "DataSaida":
+                filteredReservations = sortAscending ? filteredReservations.OrderBy(r => r.DataSaida).ToList() : filteredReservations.OrderByDescending(r => r.DataSaida).ToList();
+                break;
+            case "Total":
+                filteredReservations = sortAscending ? filteredReservations.OrderBy(r => r.TotalGeral).ToList() : filteredReservations.OrderByDescending(r => r.TotalGeral).ToList();
+                break;
+        }
+    }
+
+    private void Sort(string column)
+    {
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+        FilterReservations();
+    }
+
+    private RenderFragment GetSortIcon(string column)
+    {
+        if (sortColumn != column)
+        {
+            return @<span class="text-gray-300 ml-1">⇅</span>;
+        }
+        return sortAscending ? @<span class="text-blue-600 ml-1">↑</span> : @<span class="text-blue-600 ml-1">↓</span>;
+    }
+
+    private void ViewDetails(int id)
+    {
+        Navigation.NavigateTo($"reservas/detalhes/{id}");
+    }
+}

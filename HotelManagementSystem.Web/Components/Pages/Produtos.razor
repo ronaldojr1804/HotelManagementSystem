@@ -1,0 +1,159 @@
+@page "/produtos"
+@attribute [Authorize]
+@inject ProductService ProductService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold text-gray-800">Produtos</h1>
+    <button @onclick="OpenAddModal" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200 flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Novo Produto
+    </button>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <div class="relative w-64">
+            <input type="text" @bind="searchTerm" @bind:event="oninput" @bind:after="SearchProducts" placeholder="Buscar produto..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        </div>
+        <span class="text-sm font-medium text-gray-600">Total: <span class="text-gray-900 font-bold">@totalCount</span></span>
+    </div>
+    
+    <div class="p-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        @if (products == null)
+        {
+            <p class="text-gray-500 col-span-full text-center">Carregando...</p>
+        }
+        else if (!products.Any())
+        {
+            <p class="text-gray-500 col-span-full text-center italic">Nenhum produto encontrado.</p>
+        }
+        else
+        {
+            @foreach (var product in products)
+            {
+                <div class="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 p-5 border border-gray-100">
+                    <h3 class="text-lg font-bold text-gray-800 mb-1">@product.Nome</h3>
+                    <p class="text-2xl font-bold text-green-600">@product.Preco.ToString("C")</p>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Pagination -->
+    <div class="px-6 py-4 border-t border-gray-100 flex justify-between items-center bg-gray-50">
+        <span class="text-sm text-gray-600">
+            Mostrando @((currentPage - 1) * pageSize + 1) a @Math.Min(currentPage * pageSize, totalCount) de @totalCount registros
+        </span>
+        <div class="flex space-x-2">
+            <button @onclick="PreviousPage" disabled="@(currentPage == 1)" class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                Anterior
+            </button>
+            <button @onclick="NextPage" disabled="@(currentPage * pageSize >= totalCount)" class="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                Próxima
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (showModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Novo Produto</h2>
+            
+            <EditForm Model="currentProduct" OnValidSubmit="SaveProduct">
+                <DataAnnotationsValidator />
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+                        <InputText @bind-Value="currentProduct.Nome" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Preço</label>
+                        <InputNumber @bind-Value="currentProduct.Preco" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                    </div>
+                </div>
+                
+                <div class="mt-8 flex justify-end space-x-3">
+                    <button type="button" @onclick="CloseModal" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm">Salvar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Produto>? products;
+    private Produto currentProduct = new();
+    private bool showModal = false;
+
+    // Pagination & Search
+    private int currentPage = 1;
+    private int pageSize = 12;
+    private int totalCount;
+    private string searchTerm = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+    }
+
+    private async Task LoadProducts()
+    {
+        var result = await ProductService.GetProductsAsync(currentPage, pageSize, searchTerm);
+        products = result.Products;
+        totalCount = result.TotalCount;
+    }
+
+    private async Task SearchProducts()
+    {
+        currentPage = 1;
+        await LoadProducts();
+    }
+
+    private async Task PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await LoadProducts();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (currentPage * pageSize < totalCount)
+        {
+            currentPage++;
+            await LoadProducts();
+        }
+    }
+
+    private void OpenAddModal()
+    {
+        currentProduct = new Produto();
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private async Task SaveProduct()
+    {
+        await ProductService.AddProductAsync(currentProduct);
+        showModal = false;
+        await LoadProducts();
+    }
+}

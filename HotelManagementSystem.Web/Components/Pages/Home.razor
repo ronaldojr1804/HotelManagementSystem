@@ -1,0 +1,155 @@
+﻿@page "/"
+@attribute [Authorize]
+@inject RoomService RoomService
+@inject ReservationService ReservationService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-800 mb-2">Bem-vindo, Admin</h1>
+    <p class="text-gray-500">Visão geral do hotel hoje, @DateTime.Now.ToLongDateString()</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Card 1: Ocupação -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center">
+        <div class="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+        </div>
+        <div>
+            <p class="text-sm text-gray-500 font-medium">Ocupação</p>
+            <p class="text-2xl font-bold text-gray-800">@occupancyRate%</p>
+            <p class="text-xs text-gray-400">@occupiedRooms de @totalRooms quartos</p>
+        </div>
+    </div>
+
+    <!-- Card 2: Chegadas -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center">
+        <div class="p-3 rounded-full bg-green-100 text-green-600 mr-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+            </svg>
+        </div>
+        <div>
+            <p class="text-sm text-gray-500 font-medium">Chegadas Hoje</p>
+            <p class="text-2xl font-bold text-gray-800">@arrivalsToday</p>
+            <p class="text-xs text-gray-400">Hóspedes esperados</p>
+        </div>
+    </div>
+
+    <!-- Card 3: Saídas -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center">
+        <div class="p-3 rounded-full bg-red-100 text-red-600 mr-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+            </svg>
+        </div>
+        <div>
+            <p class="text-sm text-gray-500 font-medium">Saídas Hoje</p>
+            <p class="text-2xl font-bold text-gray-800">@departuresToday</p>
+            <p class="text-xs text-gray-400">Check-outs pendentes</p>
+        </div>
+    </div>
+
+    <!-- Card 4: Quartos Sujos -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center">
+        <div class="p-3 rounded-full bg-yellow-100 text-yellow-600 mr-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+        </div>
+        <div>
+            <p class="text-sm text-gray-500 font-medium">Limpeza</p>
+            <p class="text-2xl font-bold text-gray-800">@dirtyRooms</p>
+            <p class="text-xs text-gray-400">Quartos para limpar</p>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Ações Rápidas</h2>
+        <div class="grid grid-cols-2 gap-4">
+            <a href="reservas/nova" class="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group cursor-pointer">
+                <div class="p-3 bg-blue-100 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                </div>
+                <span class="font-medium text-gray-700 group-hover:text-blue-700">Nova Reserva</span>
+            </a>
+            <a href="hospedes" class="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group cursor-pointer">
+                <div class="p-3 bg-blue-100 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                </div>
+                <span class="font-medium text-gray-700 group-hover:text-blue-700">Novo Hóspede</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Próximas Chegadas</h2>
+        @if (upcomingArrivals == null || !upcomingArrivals.Any())
+        {
+             <p class="text-gray-500 text-sm italic">Nenhuma chegada prevista para hoje.</p>
+        }
+        else
+        {
+            <div class="space-y-4">
+                @foreach (var res in upcomingArrivals)
+                {
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mr-3">
+                                @res.Hospede?.Nome.Substring(0, 1)
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-800">@res.Hospede?.Nome</p>
+                                <p class="text-xs text-gray-500">Quarto @res.Quarto?.Numero</p>
+                            </div>
+                        </div>
+                        <a href="reservas/detalhes/@res.Id" class="text-sm text-blue-600 hover:underline">Ver</a>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private int totalRooms;
+    private int occupiedRooms;
+    private int dirtyRooms;
+    private int occupancyRate;
+    private int arrivalsToday;
+    private int departuresToday;
+    private List<Reserva> upcomingArrivals = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var rooms = await RoomService.GetRoomsAsync();
+        totalRooms = rooms.Count;
+        occupiedRooms = rooms.Count(r => r.EstaOcupado);
+        dirtyRooms = rooms.Count(r => !r.EstaLimpo);
+        occupancyRate = totalRooms > 0 ? (int)((double)occupiedRooms / totalRooms * 100) : 0;
+
+        var reservations = await ReservationService.GetReservationsAsync();
+        var today = DateTime.Today;
+        
+        arrivalsToday = reservations.Count(r => r.DataEntrada.Date == today);
+        departuresToday = reservations.Count(r => r.DataSaida.Date == today);
+        
+        upcomingArrivals = reservations
+            .Where(r => r.DataEntrada.Date >= today && 
+                        r.DataEntrada.Date <= today.AddDays(1) && 
+                        !r.Cancelada && 
+                        !r.DataRealCheckIn.HasValue)
+            .OrderBy(r => r.DataEntrada)
+            .Take(5)
+            .ToList();
+    }
+}

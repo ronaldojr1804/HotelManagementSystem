@@ -1,0 +1,73 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <base href="/"/>
+    <!-- <ResourcePreloader /> -->
+    <link rel="stylesheet" href="css/site.css"/>
+    <link rel="stylesheet" href="HotelManagementSystem.Web.styles.css"/>
+    <HeadOutlet/>
+    <title>@Branding.PageTitle</title>
+    <link rel="icon" type="image/x-icon" href="@Branding.FaviconUrl"/>
+</head>
+
+<body>
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated != true)
+                    {
+                        <RedirectToLogin/>
+                    }
+                    else
+                    {
+                        <p role="alert">Você não tem permissão para acessar esta página.</p>
+                    }
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1"/>
+        </Found>
+        <NotFound>
+            <PageTitle>Not found</PageTitle>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <p role="alert">Sorry, there's nothing at this address.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
+<script src="_framework/blazor.web.js"></script>
+<script>
+        document.addEventListener('input', function (e) {
+            if (e.target && e.target.id === 'cpfInput') {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length > 11) value = value.slice(0, 11);
+                
+                if (value.length > 9) {
+                    value = value.replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*/, '$1.$2.$3-$4');
+                } else if (value.length > 6) {
+                    value = value.replace(/^(\d{3})(\d{3})(\d{3}).*/, '$1.$2.$3');
+                } else if (value.length > 3) {
+                    value = value.replace(/^(\d{3})(\d{3}).*/, '$1.$2');
+                }
+                
+                e.target.value = value;
+            }
+        });
+    </script>
+</body>
+
+</html>
+@inject HotelManagementSystem.Web.Services.BrandingService Branding
+
+@code {
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Branding.InitializeAsync();
+    }
+
+}

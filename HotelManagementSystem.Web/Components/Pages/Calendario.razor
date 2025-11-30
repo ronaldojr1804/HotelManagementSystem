@@ -1,0 +1,399 @@
+@page "/calendario"
+@attribute [Authorize]
+@inject RoomService RoomService
+@inject ReservationService ReservationService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<div class="flex flex-col h-full">
+    <div class="mb-4 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-800">Calendário de Reservas</h1>
+            <p class="text-gray-500">Visão geral da ocupação dos quartos.</p>
+        </div>
+        <div class="flex space-x-2">
+            <button @onclick="PreviousMonth" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-2 px-4 rounded shadow-sm">
+                &lt; Anterior
+            </button>
+            <span class="text-lg font-semibold text-gray-700 py-2 px-4 bg-gray-100 rounded">
+                @CurrentDate.ToString("MMMM yyyy")
+            </span>
+            <button @onclick="NextMonth" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-2 px-4 rounded shadow-sm">
+                Próximo &gt;
+            </button>
+        </div>
+    </div>
+
+    <!-- Status Filters -->
+    <div class="mb-4 flex flex-wrap gap-2 bg-white p-3 rounded-lg shadow-sm border border-gray-200">
+        <button @onclick="() => { showActive = !showActive; CalculateColumns(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showActive ? "bg-green-100 text-green-800 border-green-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+            Ativas
+        </button>
+        <button @onclick="() => { showFuture = !showFuture; CalculateColumns(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showFuture ? "bg-blue-100 text-blue-800 border-blue-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+            Futuras
+        </button>
+        <button @onclick="() => { showOverdue = !showOverdue; CalculateColumns(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showOverdue ? "bg-yellow-100 text-yellow-800 border-yellow-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+            Atrasadas
+        </button>
+        <button @onclick="() => { showCompleted = !showCompleted; CalculateColumns(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showCompleted ? "bg-gray-100 text-gray-800 border-gray-200" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+            Finalizadas
+        </button>
+        <button @onclick="() => { showCancelled = !showCancelled; CalculateColumns(); }" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border @(showCancelled ? "bg-red-50 text-red-600 border-red-100" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")">
+            Canceladas
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-auto bg-white rounded-xl shadow-sm border border-gray-200 relative">
+        @if (isLoading)
+        {
+            <div class="flex items-center justify-center h-full">
+                <div class="text-gray-500">Carregando calendário...</div>
+            </div>
+        }
+        else
+        {
+            <div class="min-w-max">
+                <!-- Header Row (Days) -->
+                <div class="flex border-b border-gray-200 sticky top-0 bg-white z-10">
+                    <div class="w-32 flex-shrink-0 p-3 font-bold text-gray-700 bg-gray-50 border-r border-gray-200 sticky left-0 z-20">
+                        Quarto
+                    </div>
+                    @foreach (var col in Columns)
+                    {
+                        @if (!col.IsGap)
+                        {
+                            <div class="flex-shrink-0 text-center border-r border-gray-100 p-2 @(col.Date == DateTime.Today ? "bg-blue-50 text-blue-600 font-bold" : "text-gray-600")" style="width: @(col.Width)px;">
+                                <div class="text-xs uppercase">@col.Date.ToString("ddd")</div>
+                                <div class="text-sm">@col.Date.Day</div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="flex-shrink-0 text-center border-r border-gray-100 p-2 text-gray-400 bg-gray-50 flex flex-col justify-center" style="width: @(col.Width)px;">
+                                <div class="text-xs font-medium">@col.Date.Day - @col.GapEnd?.Day</div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <!-- Room Rows -->
+                @foreach (var room in Rooms)
+                {
+                    <div class="flex border-b border-gray-100 hover:bg-gray-50 transition-colors relative group h-16">
+                        <!-- Room Name Column -->
+                        <div class="w-32 flex-shrink-0 p-3 font-medium text-gray-800 border-r border-gray-200 bg-white sticky left-0 z-20 group-hover:bg-gray-50 flex flex-col justify-center">
+                            <span>Quarto @room.Numero</span>
+                            <span class="text-xs text-gray-500">@room.Tipo</span>
+                        </div>
+
+                        <!-- Days Columns Container -->
+                        <div class="relative flex">
+                            <!-- Background Grid -->
+                            @foreach (var col in Columns)
+                            {
+                                @if (!col.IsGap)
+                                {
+                                    <div class="flex-shrink-0 border-r border-gray-100 h-full @(col.Date == DateTime.Today ? "bg-blue-50" : "")" style="width: @(col.Width)px;" @onclick="() => OpenCell(room, col.Date)"></div>
+                                }
+                                else
+                                {
+                                    <div class="flex-shrink-0 border-r border-gray-100 h-full bg-gray-50" style="width: @(col.Width)px;"></div>
+                                }
+                            }
+
+                            <!-- Reservations Layer -->
+                            @foreach (var reservation in GetReservationsForRoomInRange(room.Id))
+                            {
+                                var (left, width) = CalculatePosition(reservation);
+                                <div class="absolute top-1 bottom-1 rounded cursor-pointer @GetStatusColor(reservation) shadow-sm hover:shadow-md hover:opacity-100 opacity-90 flex items-center px-2 text-xs text-white overflow-hidden transition-all z-10"
+                                     style="left: @(left)px; width: @(width)px;"
+                                     title="@($"Hóspede: {reservation.Hospede?.Nome}\nEntrada: {reservation.DataEntrada:dd/MM}\nSaída: {reservation.DataSaida:dd/MM}\nStatus: {GetStatusText(reservation)}")"
+                                     @onclick:stopPropagation="true"
+                                     @onclick="() => ShowDetails(reservation)">
+                                    <div class="flex flex-col justify-center w-full overflow-hidden">
+                                        <span class="truncate font-bold text-sm">@reservation.Hospede?.Nome</span>
+                                        @if (width > 100)
+                                        {
+                                            <span class="truncate text-xs opacity-90">@reservation.DataEntrada.ToString("dd/MM") - @reservation.DataSaida.ToString("dd/MM")</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@if (selectedReservation != null)
+{
+    <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="flex justify-between items-center p-5 border-b border-gray-200 rounded-t-lg bg-gray-50">
+                <h3 class="text-xl font-semibold text-gray-900">Detalhes da Reserva</h3>
+                <button @onclick="CloseModal" class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-sm font-medium text-gray-500">Hóspede</label>
+                    <p class="text-lg font-medium text-gray-900">@selectedReservation.Hospede?.Nome</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-500">Entrada</label>
+                        <p class="text-gray-900">@selectedReservation.DataEntrada.ToShortDateString()</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-500">Saída</label>
+                        <p class="text-gray-900">@selectedReservation.DataSaida.ToShortDateString()</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-500">Quarto</label>
+                    <p class="text-gray-900">Quarto @selectedReservation.Quarto?.Numero (@selectedReservation.Quarto?.Tipo)</p>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-500">Status</label>
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full @GetStatusColor(selectedReservation)">
+                        @GetStatusText(selectedReservation)
+                    </span>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
+                <a href="/reservas/detalhes/@selectedReservation.Id" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                    Ver Completo
+                </a>
+                <button @onclick="CloseModal" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DateTime CurrentDate = DateTime.Today;
+    private DateTime StartDate => new DateTime(CurrentDate.Year, CurrentDate.Month, 1);
+    private DateTime EndDate => StartDate.AddMonths(1).AddDays(-1);
+
+    private List<Quarto> Rooms = new();
+    private List<Reserva> Reservations = new();
+    private bool isLoading = true;
+    private Reserva? selectedReservation;
+
+    private List<CalendarColumn> Columns = new();
+    private const double WidthOccupied = 160;
+    private const double WidthEmpty = 60;
+    private const double WidthGap = 60;
+
+    private class CalendarColumn
+    {
+        public bool IsGap { get; set; }
+        public DateTime Date { get; set; }
+        public DateTime? GapEnd { get; set; }
+        public double Width { get; set; }
+        public double Left { get; set; } // Pre-calculated X position
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        Rooms = await RoomService.GetRoomsAsync();
+        Reservations = await ReservationService.GetReservationsAsync();
+        CalculateColumns();
+        isLoading = false;
+    }
+
+    private bool showActive = true;
+    private bool showFuture = true;
+    private bool showOverdue = true;
+    private bool showCompleted = false;
+    private bool showCancelled = false;
+
+    private void PreviousMonth()
+    {
+        CurrentDate = CurrentDate.AddMonths(-1);
+        CalculateColumns();
+        StateHasChanged();
+    }
+
+    private void NextMonth()
+    {
+        CurrentDate = CurrentDate.AddMonths(1);
+        CalculateColumns();
+        StateHasChanged();
+    }
+
+    private void CalculateColumns()
+    {
+        var dates = new HashSet<DateTime>();
+
+        // Always include start and end of the month
+        dates.Add(StartDate);
+        dates.Add(EndDate);
+
+        // Include days with reservations
+        var relevantReservations = Reservations.Where(r =>
+            r.DataSaida.Date > StartDate &&
+            r.DataEntrada.Date <= EndDate &&
+            ShouldShowReservation(r)).ToList();
+
+        foreach (var res in relevantReservations)
+        {
+            var start = res.DataEntrada.Date < StartDate ? StartDate : res.DataEntrada.Date;
+            var end = res.DataSaida.Date > EndDate ? EndDate : res.DataSaida.Date;
+
+            for (var dt = start; dt <= end; dt = dt.AddDays(1))
+            {
+                dates.Add(dt);
+            }
+        }
+
+        var sortedDates = dates.OrderBy(d => d).ToList();
+        Columns.Clear();
+        double currentLeft = 0;
+
+        for (int i = 0; i < sortedDates.Count; i++)
+        {
+            var date = sortedDates[i];
+
+            // Add the date column
+            var width = GetColumnWidth(date);
+            Columns.Add(new CalendarColumn
+            {
+                IsGap = false,
+                Date = date,
+                Width = width,
+                Left = currentLeft
+            });
+            currentLeft += width;
+
+            // Check for gap
+            if (i < sortedDates.Count - 1)
+            {
+                var nextDate = sortedDates[i + 1];
+                if ((nextDate - date).Days > 1)
+                {
+                    // There is a gap
+                    var gapStart = date.AddDays(1);
+                    var gapEnd = nextDate.AddDays(-1);
+
+                    Columns.Add(new CalendarColumn
+                    {
+                        IsGap = true,
+                        Date = gapStart,
+                        GapEnd = gapEnd,
+                        Width = WidthGap,
+                        Left = currentLeft
+                    });
+                    currentLeft += WidthGap;
+                }
+            }
+        }
+    }
+
+    private double GetColumnWidth(DateTime date)
+    {
+        // Check if any reservation exists on this date
+        var hasReservation = Reservations.Any(r =>
+            r.DataEntrada.Date <= date &&
+            r.DataSaida.Date >= date && // Inclusive check
+            ShouldShowReservation(r));
+
+        return hasReservation ? WidthOccupied : WidthEmpty;
+    }
+
+    private List<Reserva> GetReservationsForRoomInRange(int roomId)
+    {
+        return Reservations.Where(r =>
+            r.QuartoId == roomId &&
+            r.DataSaida.Date > StartDate &&
+            r.DataEntrada.Date <= EndDate &&
+            ShouldShowReservation(r)).ToList();
+    }
+
+    private bool ShouldShowReservation(Reserva r)
+    {
+        if (r.Cancelada) return showCancelled;
+        if (r.CheckOutRealizado) return showCompleted;
+        if (r.DataSaida.Date < DateTime.Today && !r.CheckOutRealizado) return showOverdue; // Atrasada
+        if (r.DataEntrada.Date > DateTime.Today) return showFuture; // Futura
+        return showActive; // Ativa
+    }
+
+    private (double left, double width) CalculatePosition(Reserva r)
+    {
+        var start = r.DataEntrada.Date < StartDate ? StartDate : r.DataEntrada.Date;
+        var end = r.DataSaida.Date > EndDate ? EndDate : r.DataSaida.Date;
+
+        // Find start column
+        var startCol = Columns.FirstOrDefault(c => !c.IsGap && c.Date == start);
+        if (startCol == null) return (0, 0); // Should not happen if logic is correct
+
+        double left = startCol.Left;
+        double width = 0;
+
+        // Calculate width by summing columns until end date
+        // Note: The reservation might span across gaps, but visually it should probably skip the gap?
+        // Or should it flow through?
+        // If a reservation exists, the dates SHOULD be in the list, so no gap should exist *under* a reservation.
+        // So we just sum the widths of the columns that correspond to the reservation days.
+
+        foreach (var col in Columns)
+        {
+            if (!col.IsGap && col.Date >= start && col.Date <= end)
+            {
+                width += col.Width;
+            }
+            // If we encounter a gap *inside* the range, it means our logic for "relevant reservations" failed
+            // because all days of a reservation should be in sortedDates.
+        }
+
+        return (left, width);
+    }
+
+    private void OpenCell(Quarto room, DateTime date)
+    {
+        Navigation.NavigateTo($"/reservas/nova");
+    }
+
+    private void ShowDetails(Reserva reserva)
+    {
+        selectedReservation = reserva;
+    }
+
+    private void CloseModal()
+    {
+        selectedReservation = null;
+    }
+
+    private string GetStatusColor(Reserva r)
+    {
+        if (r.Cancelada) return "bg-red-500";
+        if (r.CheckOutRealizado) return "bg-gray-500";
+        if (r.DataSaida.Date < DateTime.Today && !r.CheckOutRealizado) return "bg-yellow-500"; // Atrasado
+        if (r.DataEntrada.Date > DateTime.Today) return "bg-blue-400"; // Futura
+        return "bg-green-500"; // Ativa
+    }
+
+    private string GetStatusText(Reserva r)
+    {
+        if (r.Cancelada) return "Cancelada";
+        if (r.CheckOutRealizado) return "Finalizada";
+        if (r.DataSaida.Date < DateTime.Today && !r.CheckOutRealizado) return "Atrasada";
+        if (r.DataEntrada.Date > DateTime.Today) return "Futura";
+        return "Ativa";
+    }
+
+}

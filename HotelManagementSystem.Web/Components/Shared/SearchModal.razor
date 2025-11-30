@@ -1,0 +1,273 @@
+@using HotelManagementSystem.Web.Models
+@using HotelManagementSystem.Web.Services
+@inject GuestService GuestService
+@inject RoomService RoomService
+@inject ProductService ProductService
+
+@if (IsVisible)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 transform transition-all scale-100 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800">
+                    @GetTitle()
+                </h2>
+                <button @onclick="Close" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="mb-4">
+                <div class="relative">
+                    <input type="text" 
+                           @bind="searchTerm" 
+                           @bind:event="oninput" 
+                           placeholder="@GetPlaceholder()"
+                           class="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto">
+                @if (isLoading)
+                {
+                    <div class="flex justify-center py-8">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                }
+                else if (Type == SearchType.Guest)
+                {
+                    @if (filteredGuests.Any())
+                    {
+                        <div class="space-y-2">
+                            @foreach (var guest in filteredGuests)
+                            {
+                                <div @onclick="() => SelectGuest(guest)" class="p-3 hover:bg-blue-50 rounded-lg cursor-pointer border border-transparent hover:border-blue-100 transition-colors">
+                                    <div class="font-medium text-gray-800">@guest.Nome</div>
+                                    <div class="text-sm text-gray-500">CPF: @guest.CPF</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-center text-gray-500 py-4">Nenhum hóspede encontrado.</p>
+                    }
+                }
+                else if (Type == SearchType.Room)
+                {
+                    @if (filteredRooms.Any())
+                    {
+                        <div class="grid grid-cols-2 gap-3">
+                            @foreach (var room in filteredRooms)
+                            {
+                                bool isAvailable = availableRoomIds == null ? !room.EstaOcupado : availableRoomIds.Contains(room.Id);
+                                string statusText = isAvailable ? "Livre" : "Ocupado";
+                                string statusClass = isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800";
+                                string cardClass = isAvailable ? "hover:bg-blue-50 hover:border-blue-200 bg-white" : "bg-red-50 border-red-100 opacity-60 cursor-not-allowed";
+                                
+                                <div @onclick="() => SelectRoom(room, isAvailable)" class="p-3 border rounded-lg cursor-pointer transition-all @cardClass">
+                                    <div class="flex justify-between items-start">
+                                        <span class="font-bold text-gray-800">Quarto @room.Numero</span>
+                                        <span class="text-xs px-2 py-0.5 rounded @statusClass">
+                                            @statusText
+                                        </span>
+                                    </div>
+                                    <div class="text-sm text-gray-600 mt-1">@room.Tipo</div>
+                                    <div class="text-blue-600 font-bold mt-2">@room.PrecoBase.ToString("C")</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-center text-gray-500 py-4">Nenhum quarto encontrado.</p>
+                    }
+                }
+                else if (Type == SearchType.Product)
+                {
+                    @if (filteredProducts.Any())
+                    {
+                        <div class="space-y-2">
+                            @foreach (var product in filteredProducts)
+                            {
+                                <div @onclick="() => SelectProduct(product)" class="p-3 hover:bg-blue-50 rounded-lg cursor-pointer border border-transparent hover:border-blue-100 transition-colors flex justify-between items-center">
+                                    <div class="font-medium text-gray-800">@product.Nome</div>
+                                    <div class="text-blue-600 font-bold">@product.Preco.ToString("C")</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-center text-gray-500 py-4">Nenhum produto encontrado.</p>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public SearchType Type { get; set; }
+    [Parameter] public DateTime? StartDate { get; set; }
+    [Parameter] public DateTime? EndDate { get; set; }
+    [Parameter] public EventCallback<Hospede> OnGuestSelected { get; set; }
+    [Parameter] public EventCallback<Quarto> OnRoomSelected { get; set; }
+    [Parameter] public EventCallback<Produto> OnProductSelected { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Inject] ReservationService ReservationService { get; set; } = default!;
+
+    private string _searchTerm = "";
+    private string searchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            _searchTerm = value;
+            FilterResults();
+        }
+    }
+    private List<Hospede> allGuests = new();
+    private List<Quarto> allRooms = new();
+    private List<Produto> allProducts = new();
+    private List<Hospede> filteredGuests = new();
+    private List<Quarto> filteredRooms = new();
+    private List<Produto> filteredProducts = new();
+    private bool isLoading = false;
+    private HashSet<int>? availableRoomIds = null;
+
+    public enum SearchType
+    {
+        Guest,
+        Room,
+        Product
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible)
+        {
+            isLoading = true;
+            searchTerm = "";
+            if (Type == SearchType.Guest && !allGuests.Any())
+            {
+                allGuests = await GuestService.GetGuestsAsync();
+            }
+            else if (Type == SearchType.Room)
+            {
+                // Always reload rooms to get fresh status if needed, or at least check availability
+                allRooms = await RoomService.GetRoomsAsync();
+                
+                if (StartDate.HasValue && EndDate.HasValue)
+                {
+                    availableRoomIds = await ReservationService.GetAvailableRoomIdsAsync(StartDate.Value, EndDate.Value);
+                }
+                else
+                {
+                    availableRoomIds = null; // No dates, rely on current status or just show all
+                }
+            }
+            else if (Type == SearchType.Product && !allProducts.Any())
+            {
+                allProducts = await ProductService.GetProductsAsync();
+            }
+            FilterResults();
+            isLoading = false;
+        }
+    }
+
+    private void FilterResults()
+    {
+        if (Type == SearchType.Guest)
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm))
+            {
+                filteredGuests = allGuests;
+            }
+            else
+            {
+                filteredGuests = allGuests.Where(g => 
+                    g.Nome.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) || 
+                    g.CPF.Contains(searchTerm)).ToList();
+            }
+        }
+        else if (Type == SearchType.Room)
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm))
+            {
+                filteredRooms = allRooms;
+            }
+            else
+            {
+                filteredRooms = allRooms.Where(r => 
+                    r.Numero.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) || 
+                    r.Tipo.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+        }
+        else if (Type == SearchType.Product)
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm))
+            {
+                filteredProducts = allProducts;
+            }
+            else
+            {
+                filteredProducts = allProducts.Where(p => 
+                    p.Nome.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+        }
+    }
+
+    private async Task SelectGuest(Hospede guest)
+    {
+        await OnGuestSelected.InvokeAsync(guest);
+        await Close();
+    }
+
+    private async Task SelectRoom(Quarto room, bool isAvailable)
+    {
+        if (!isAvailable) return;
+
+        await OnRoomSelected.InvokeAsync(room);
+        await Close();
+    }
+
+    private async Task SelectProduct(Produto product)
+    {
+        await OnProductSelected.InvokeAsync(product);
+        await Close();
+    }
+
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private string GetTitle()
+    {
+        return Type switch
+        {
+            SearchType.Guest => "Buscar Hóspede",
+            SearchType.Room => "Buscar Quarto",
+            SearchType.Product => "Buscar Produto",
+            _ => "Buscar"
+        };
+    }
+
+    private string GetPlaceholder()
+    {
+        return Type switch
+        {
+            SearchType.Guest => "Nome ou CPF...",
+            SearchType.Room => "Número ou Tipo...",
+            SearchType.Product => "Nome do produto...",
+            _ => "Buscar..."
+        };
+    }
+}

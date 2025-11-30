@@ -1,0 +1,471 @@
+@page "/reservas/detalhes/{Id:int}"
+@attribute [Authorize]
+@inject ReservationService ReservationService
+@inject ProductService ProductService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+@using HotelManagementSystem.Web.Components.Shared
+
+<div class="w-full px-6 pb-10">
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center">
+            <a href="reservas" class="mr-4 text-gray-500 hover:text-gray-700">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+            </a>
+            <h1 class="text-3xl font-bold text-gray-800">Detalhes da Reserva #@Id</h1>
+        </div>
+        <div class="flex space-x-2">
+            <button @onclick="Print" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-200 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Imprimir
+            </button>
+            @if (reservation?.DataCheckOut == null && !reservation?.Cancelada == true)
+            {
+                <button @onclick="() => showCancelModal = true" class="bg-white border border-red-200 text-red-600 hover:bg-red-50 font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-200">
+                    Cancelar
+                </button>
+                
+                @if (!reservation.DataRealCheckIn.HasValue && reservation.DataEntrada <= DateTime.Today)
+                {
+                     <button @onclick="CheckIn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200">
+                        Realizar Check-in
+                    </button>
+                }
+                
+                @if (reservation.DataRealCheckIn.HasValue)
+                {
+                    <button @onclick="CheckOut" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition duration-200">
+                        Realizar Check-out
+                    </button>
+                }
+                else
+                {
+                     <button disabled class="bg-gray-300 text-gray-500 font-semibold py-2 px-4 rounded-lg shadow transition duration-200 cursor-not-allowed" title="Necessário realizar Check-in primeiro">
+                        Realizar Check-out
+                    </button>
+                }
+            }
+        </div>
+    </div>
+
+    @if (reservation == null)
+    {
+        <p class="text-gray-500">Carregando...</p>
+    }
+    else
+    {
+        @if (reservation.Cancelada)
+        {
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <h3 class="text-red-800 font-bold flex items-center mb-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Reserva Cancelada
+                </h3>
+                <p class="text-red-700 text-sm"><strong>Motivo:</strong> @reservation.JustificativaCancelamento</p>
+                @if (!string.IsNullOrEmpty(reservation.UsuarioCancelamentoId))
+                {
+                    <p class="text-red-600 text-xs mt-1">Cancelado por: @reservation.UsuarioCancelamentoId</p>
+                }
+            </div>
+        }
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Info Card -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Informações Gerais</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-500">Hóspede Principal</p>
+                            <div class="flex items-center">
+                                <p class="font-medium text-gray-800 mr-2">@reservation.Hospede?.Nome</p>
+                                <a href="@($"hospedes?EditId={reservation.HospedeId}")" class="text-blue-500 hover:text-blue-700" title="Ver Hóspede">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                </a>
+                            </div>
+                            <p class="text-xs text-gray-400">CPF: @reservation.Hospede?.CPF</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Quarto</p>
+                            <div class="flex items-center">
+                                <p class="font-medium text-gray-800 mr-2">Quarto @reservation.Quarto?.Numero (@reservation.Quarto?.Tipo)</p>
+                                <a href="@($"quartos?EditId={reservation.QuartoId}")" class="text-blue-500 hover:text-blue-700" title="Ver Quarto">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Entrada Prevista</p>
+                            <p class="font-medium text-gray-800">@reservation.DataEntrada.ToShortDateString()</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Saída Prevista</p>
+                            <p class="font-medium text-gray-800">@reservation.DataSaida.ToShortDateString()</p>
+                        </div>
+                        @if (reservation.DataRealCheckIn.HasValue)
+                        {
+                            <div>
+                                <p class="text-sm text-gray-500">Check-in Realizado</p>
+                                <p class="font-medium text-green-700">@reservation.DataRealCheckIn.Value.ToString("dd/MM/yyyy HH:mm")</p>
+                            </div>
+                        }
+                        @if (reservation.DataCheckOut.HasValue)
+                        {
+                            <div>
+                                <p class="text-sm text-gray-500">Check-out Realizado</p>
+                                <p class="font-medium text-blue-700">@reservation.DataCheckOut.Value.ToString("dd/MM/yyyy HH:mm")</p>
+                            </div>
+                        }
+                        <div>
+                            <p class="text-sm text-gray-500">Data de Cadastro</p>
+                            <p class="font-medium text-gray-800">@reservation.DataCadastro.ToString("dd/MM/yyyy HH:mm")</p>
+                            @if (!string.IsNullOrEmpty(reservation.UsuarioCriacaoId))
+                            {
+                                <p class="text-xs text-gray-400">Por: @reservation.UsuarioCriacaoId</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Consumo Section -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 class="text-xl font-bold text-gray-800">Consumo</h2>
+                        @if (reservation.DataCheckOut == null && !reservation.Cancelada)
+                        {
+                            <button @onclick="() => showAddConsumptionModal = true" class="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                </svg>
+                                Adicionar Item
+                            </button>
+                        }
+                    </div>
+
+                    @if (reservation.Consumos.Any())
+                    {
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="text-xs text-gray-500 uppercase border-b">
+                                    <th class="py-2">Item</th>
+                                    <th class="py-2 text-right">Qtd</th>
+                                    <th class="py-2 text-right">Valor Unit.</th>
+                                    <th class="py-2 text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                @foreach (var item in reservation.Consumos)
+                                {
+                                    <tr>
+                                        <td class="py-2 text-gray-800">@item.Produto?.Nome</td>
+                                        <td class="py-2 text-right text-gray-600">@item.Quantidade</td>
+                                        <td class="py-2 text-right text-gray-600">@item.ValorUnitarioNoMomento.ToString("C")</td>
+                                        <td class="py-2 text-right font-medium text-gray-800">@item.Total.ToString("C")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <p class="text-gray-500 text-sm italic">Nenhum consumo registrado.</p>
+                    }
+                </div>
+
+                <!-- Limpezas Section -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 class="text-xl font-bold text-gray-800">Limpezas</h2>
+                        <button @onclick="() => showAddCleaningModal = true" class="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Registrar Limpeza
+                        </button>
+                    </div>
+
+                    @if (cleanings.Any())
+                    {
+                        <div class="space-y-3">
+                            @foreach (var cleaning in cleanings)
+                            {
+                                <div class="flex justify-between items-start bg-gray-50 p-3 rounded-lg">
+                                    <div>
+                                        <p class="font-medium text-gray-800">@cleaning.Tipo</p>
+                                        <p class="text-xs text-gray-500">@cleaning.DataLimpeza.ToString("dd/MM/yyyy HH:mm") por @cleaning.RealizadoPor</p>
+                                        @if (!string.IsNullOrEmpty(cleaning.Observacoes))
+                                        {
+                                            <p class="text-sm text-gray-600 mt-1">Obs: @cleaning.Observacoes</p>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-gray-500 text-sm italic">Nenhuma limpeza registrada.</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Summary Card -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Resumo Financeiro</h2>
+                    
+                    <div class="space-y-3 mb-6">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Diárias (@((reservation.DataSaida - reservation.DataEntrada).Days) dias)</span>
+                            <span class="font-medium text-gray-800">@reservation.TotalDiarias.ToString("C")</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Consumo</span>
+                            <span class="font-medium text-gray-800">@reservation.TotalConsumo.ToString("C")</span>
+                        </div>
+                        <div class="border-t pt-3 flex justify-between text-lg font-bold text-blue-600">
+                            <span>Total</span>
+                            <span>@reservation.TotalGeral.ToString("C")</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="text-xs text-blue-800 mb-1 font-bold uppercase">Valor da Diária</p>
+                        <p class="text-sm text-blue-600">@reservation.ValorDiariaNoMomento.ToString("C")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Modal de Cancelamento -->
+@if (showCancelModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 transform transition-all scale-100">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Cancelar Reserva</h2>
+            <p class="text-gray-600 mb-4">Por favor, informe o motivo do cancelamento:</p>
+            
+            <textarea @bind="cancelJustification" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all mb-4" rows="3" placeholder="Motivo..."></textarea>
+            
+            <div class="flex justify-end space-x-3">
+                <button @onclick="() => showCancelModal = false" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium">Voltar</button>
+                <button @onclick="ConfirmCancel" disabled="@string.IsNullOrWhiteSpace(cancelJustification)" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">Confirmar Cancelamento</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal de Adição de Consumo -->
+@if (showAddConsumptionModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 transform transition-all scale-100">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Adicionar Consumo</h2>
+            
+            @if (selectedProduct == null)
+            {
+                 <button @onclick="OpenProductSearch" class="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-500 transition-colors mb-4">
+                    Selecionar Produto
+                </button>
+            }
+            else
+            {
+                <div class="bg-blue-50 p-4 rounded-lg mb-4 flex justify-between items-center">
+                    <div>
+                        <p class="font-bold text-gray-800">@selectedProduct.Nome</p>
+                        <p class="text-sm text-blue-600">@selectedProduct.Preco.ToString("C")</p>
+                    </div>
+                    <button @onclick="() => selectedProduct = null" class="text-gray-400 hover:text-red-500">
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Quantidade</label>
+                    <input type="number" @bind="quantity" min="1" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+                </div>
+            }
+
+            <div class="flex justify-end space-x-3">
+                <button @onclick="() => showAddConsumptionModal = false" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium">Cancelar</button>
+                <button @onclick="ConfirmAddConsumption" disabled="@(selectedProduct == null || quantity < 1)" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">Adicionar</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal de Adição de Limpeza -->
+@if (showAddCleaningModal)
+{
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 transform transition-all scale-100">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Registrar Limpeza</h2>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Limpeza</label>
+                <select @bind="newCleaning.Tipo" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                    <option value="Diária">Diária</option>
+                    <option value="Saída">Saída</option>
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                <textarea @bind="newCleaning.Observacoes" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" rows="3"></textarea>
+            </div>
+
+            <div class="flex justify-end space-x-3">
+                <button @onclick="() => showAddCleaningModal = false" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium">Cancelar</button>
+                <button @onclick="ConfirmAddCleaning" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm">Salvar</button>
+            </div>
+        </div>
+    </div>
+}
+
+<SearchModal IsVisible="isSearchVisible" 
+             Type="SearchModal.SearchType.Product" 
+             OnProductSelected="HandleProductSelected" 
+             OnClose="CloseSearch" />
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? authenticationStateTask { get; set; }
+
+    private Reserva? reservation;
+    
+    // Cancel Modal State
+    private bool showCancelModal = false;
+    private string cancelJustification = "";
+
+    // Consumption Modal State
+    private bool showAddConsumptionModal = false;
+    private Produto? selectedProduct;
+    private int quantity = 1;
+    
+    // Search Modal State
+    private bool isSearchVisible = false;
+
+    // Cleaning Modal State
+    private bool showAddCleaningModal = false;
+    private Limpeza newCleaning = new();
+    private List<Limpeza> cleanings = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        reservation = await ReservationService.GetReservationAsync(Id);
+        cleanings = await ReservationService.GetCleaningsByReservationAsync(Id);
+    }
+
+    private void OpenProductSearch()
+    {
+        isSearchVisible = true;
+    }
+
+    private void CloseSearch()
+    {
+        isSearchVisible = false;
+    }
+
+    private void HandleProductSelected(Produto product)
+    {
+        selectedProduct = product;
+        showAddConsumptionModal = true; // Ensure consumption modal is open/visible
+    }
+
+    private async Task ConfirmAddConsumption()
+    {
+        if (selectedProduct != null && quantity > 0)
+        {
+            await ReservationService.AddConsumptionAsync(Id, selectedProduct.Id, quantity);
+            selectedProduct = null;
+            quantity = 1;
+            showAddConsumptionModal = false;
+            await LoadData();
+        }
+    }
+
+    private async Task ConfirmCancel()
+    {
+        if (string.IsNullOrWhiteSpace(cancelJustification)) return;
+
+        string userId = "Sistema";
+        if (authenticationStateTask != null)
+        {
+            var authState = await authenticationStateTask;
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                userId = authState.User.Identity.Name ?? "Usuário";
+            }
+        }
+
+        await ReservationService.CancelReservationAsync(Id, cancelJustification, userId);
+        showCancelModal = false;
+        await LoadData();
+    }
+
+    private async Task CheckOut()
+    {
+        await ReservationService.CheckOutAsync(Id);
+        await LoadData();
+    }
+
+    private async Task CheckIn()
+    {
+        await ReservationService.CheckInAsync(Id);
+        await LoadData();
+    }
+
+    private async Task ConfirmAddCleaning()
+    {
+        if (reservation == null) return;
+
+        newCleaning.ReservaId = Id;
+        newCleaning.QuartoId = reservation.QuartoId;
+        newCleaning.DataLimpeza = DateTime.Now;
+        
+        string userId = "Sistema";
+        if (authenticationStateTask != null)
+        {
+            var authState = await authenticationStateTask;
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                userId = authState.User.Identity.Name ?? "Usuário";
+            }
+        }
+        newCleaning.RealizadoPor = userId;
+
+        await ReservationService.AddCleaningAsync(newCleaning);
+        
+        newCleaning = new(); // Reset
+        showAddCleaningModal = false;
+        await LoadData();
+    }
+
+    private async Task Print()
+    {
+        await JSRuntime.InvokeVoidAsync("open", $"/reservas/voucher/{Id}", "_blank");
+    }
+}
