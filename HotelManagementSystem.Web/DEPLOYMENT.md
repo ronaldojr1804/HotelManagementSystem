@@ -321,3 +321,8 @@ A aplicação suporta autenticação com o Identity do ASP.NET Core. A configura
 ```
 
 ## Apenas para teste Usuario padrão: Email: admin@hotel.com Password: admin | admin@admin - admin
+
+
+
+### Configuração para Docker
+docker compose up -d
